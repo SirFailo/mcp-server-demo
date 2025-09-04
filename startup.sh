@@ -12,7 +12,7 @@ echo "{
     \"auth_provider_x509_cert_url\": \"https://www.googleapis.com/oauth2/v1/certs\",
     \"client_secret\": \"$GOOGLE_CLIENT_SECRET\",
     \"redirect_uris\": [
-      \"https://your-app-name.onrender.com/oauth2callback\"
+      \"https://mcp-server-demo-uyvx.onrender.com/oauth2callback\"
     ]
   }
 }" > client_secret.json
