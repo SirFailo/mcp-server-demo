@@ -1,0 +1,11 @@
+# Virtual Environment
+venv/
+
+# Secret files
+client_secret.json
+
+# macOS specific files
+.DS_Store
+
+# VS Code specific files
+.vscode/
