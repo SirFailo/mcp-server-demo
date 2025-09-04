@@ -3,19 +3,50 @@ import flask
 import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import json # Import json to handle credentials
 
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 import googleapiclient.discovery
 
 # --- APP CONFIGURATION ---
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-CLIENT_SECRETS_FILE = "client_secret.json"
+# We no longer need CLIENT_SECRETS_FILE constant
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify'] 
 
 app = flask.Flask(__name__)
-app.secret_key = 'a_super_random_secret_key_for_flask' 
+# On Render, the FLASK_SECRET_KEY will be set as an environment variable
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_random_secret_key_for_local_dev")
 
+# --- CREDENTIALS HANDLING ---
+def get_client_config():
+    """
+    Constructs the client configuration from environment variables (for production)
+    or from a file (for local development).
+    """
+    google_client_id = os.environ.get("GOOGLE_CLIENT_ID", None)
+    google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", None)
+
+    if google_client_id and google_client_secret:
+        # Production mode: Use environment variables
+        return {
+            "web": {
+                "client_id": google_client_id,
+                "client_secret": google_client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": ["https://your-app-name.onrender.com/oauth2callback"] # This will be set by the flow
+            }
+        }
+    else:
+        # Development mode: Use the local file
+        if os.path.exists("client_secret.json"):
+            with open("client_secret.json", "r") as f:
+                return json.load(f)
+        else:
+            raise FileNotFoundError("ERROR: client_secret.json not found and GOOGLE_CLIENT_ID/SECRET env vars are not set.")
+
+# The rest of the code remains largely the same, but uses the new function
+# ... (rest of the helper functions, tools, etc.)
 # --- CORE LOGIC ("THE ENGINE" / TOOLS) ---
 
 def get_gmail_service():
@@ -77,7 +108,7 @@ def api_get_unread_threads():
     return flask.jsonify({"status": "success", "threads": formatted_threads})
 
 # --- DEMO UI ROUTES (OUR "DASHBOARD") ---
-# Authentication routes remain the same
+# Authentication routes are now updated
 
 @app.route('/')
 def index():
@@ -87,8 +118,9 @@ def index():
 
 @app.route('/login')
 def login():
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES,
+    client_config = get_client_config()
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        client_config, scopes=SCOPES,
         redirect_uri=flask.url_for('oauth2callback', _external=True))
     authorization_url, state = flow.authorization_url(
         access_type='offline', include_granted_scopes='true')
@@ -98,8 +130,9 @@ def login():
 @app.route('/oauth2callback')
 def oauth2callback():
     state = flask.session['state']
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES, state=state,
+    client_config = get_client_config()
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        client_config, scopes=SCOPES, state=state,
         redirect_uri=flask.url_for('oauth2callback', _external=True))
     authorization_response = flask.request.url
     flow.fetch_token(authorization_response=authorization_response)
@@ -110,6 +143,7 @@ def oauth2callback():
         'client_secret': credentials.client_secret, 'scopes': credentials.scopes}
     return flask.redirect(flask.url_for('profile'))
 
+# ... (the rest of the UI routes /profile, /thread, /reply, /logout remain unchanged)
 @app.route('/profile')
 def profile():
     gmail_service = get_gmail_service()
