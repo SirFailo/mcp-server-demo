@@ -11,7 +11,7 @@ import googleapiclient.discovery
 # --- APP CONFIGURATION ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # For local testing
 CLIENT_SECRETS_FILE = "client_secret.json"
-SCOPES = ['https://www.googleapis.com/auth/gmail.modify'] 
+SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
 app = flask.Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_random_secret_key_for_local_dev")
