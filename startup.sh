@@ -1,8 +1,16 @@
 #!/bin/bash
 
-# This script creates the client_secret.json file from environment variables
-# before starting the Gunicorn server.
+echo "--- startup.sh: Script has started. ---"
 
+# Verify that environment variables are set
+if [ -z "$GOOGLE_CLIENT_ID" ] || [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+  echo "--- startup.sh: FATAL ERROR - Google credentials are not set in the environment. Exiting. ---"
+  exit 1
+fi
+
+echo "--- startup.sh: Environment variables found. Creating client_secret.json... ---"
+
+# Create the client_secret.json file
 echo "{
   \"web\": {
     \"client_id\": \"$GOOGLE_CLIENT_ID\",
@@ -17,5 +25,10 @@ echo "{
   }
 }" > client_secret.json
 
+echo "--- startup.sh: client_secret.json created successfully. ---"
+echo "--- startup.sh: Listing files to confirm: ---"
+ls -l
+
+echo "--- startup.sh: Starting Gunicorn server now. ---"
 # Now, start the web server
 gunicorn --bind 0.0.0.0:$PORT app:app

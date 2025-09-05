@@ -1,1 +1,1 @@
-web: bash startup.sh
+web: chmod +x startup.sh && bash startup.sh
