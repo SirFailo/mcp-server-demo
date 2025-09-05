@@ -1,6 +1,7 @@
 import os
 import flask
 import base64
+import requests # Aggiungiamo la libreria per le richieste HTTP
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -11,11 +12,12 @@ import googleapiclient.discovery
 # --- APP CONFIGURATION ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # For local testing
 CLIENT_SECRETS_FILE = "client_secret.json"
-SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
+SCOPES = ['https://www.googleapis.com/auth/gmail.modify'] 
 
 app = flask.Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_random_secret_key_for_local_dev")
 
+# ... (tutte le funzioni helper e le altre rotte rimangono identiche)
 # --- CORE LOGIC & HELPERS ---
 def get_gmail_service():
     if 'credentials' not in flask.session: return None
@@ -33,14 +35,72 @@ def get_email_body(payload):
         return base64.urlsafe_b64decode(body_data.encode('ASCII')).decode('utf-8')
     return "<i>(Body not found)</i>"
 
-# --- ROUTES ---
+# --- NUOVA PAGINA DI CONFIGURAZIONE ---
+@app.route('/configure', methods=['GET', 'POST'])
+def configure():
+    message = ""
+    if flask.request.method == 'POST':
+        # Get data from the form
+        admin_pass = flask.request.form.get('admin_pass')
+        ctrl_n_api_key = flask.request.form.get('ctrl_n_api_key')
+        
+        # Check the admin password
+        if admin_pass != os.environ.get("ADMIN_PASSWORD"):
+            message = "Errore: Password di amministrazione non corretta."
+        else:
+            # Get Render API details from environment
+            render_api_key = os.environ.get("RENDER_API_KEY")
+            render_service_id = os.environ.get("RENDER_SERVICE_ID") # Render imposta questa variabile automaticamente
+            
+            headers = {
+                'Authorization': f'Bearer {render_api_key}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+            
+            # Prepare the data to update the environment variables
+            body = {
+                "envVars": [
+                    {"key": "CTRLN_API_KEY", "value": ctrl_n_api_key}
+                ]
+            }
+            
+            # Make the API call to Render to update the service
+            response = requests.patch(f'https://api.render.com/v1/services/{render_service_id}', headers=headers, json=body)
+            
+            if response.status_code == 200:
+                message = "Successo! La chiave API di ctrl+n è stata salvata. Il servizio si riavvierà tra poco con la nuova configurazione."
+            else:
+                message = f"Errore durante l'aggiornamento su Render: {response.text}"
 
+    # HTML form for configuration
+    return f"""
+        <html>
+            <head><title>Admin Configuration</title></head>
+            <body>
+                <h1>Configurazione MCP Server per ctrl+n</h1>
+                <p>Questa pagina è per gli sviluppatori di ctrl+n per finalizzare la configurazione.</p>
+                <form method="post">
+                    <label for="admin_pass">Password Amministratore:</label><br>
+                    <input type="password" id="admin_pass" name="admin_pass" size="50"><br><br>
+                    <label for="ctrl_n_api_key">Chiave API di ctrl+n:</label><br>
+                    <input type="text" id="ctrl_n_api_key" name="ctrl_n_api_key" size="50"><br><br>
+                    <input type="submit" value="Salva Configurazione">
+                </form>
+                {f'<p><strong>{message}</strong></p>' if message else ''}
+            </body>
+        </html>
+    """
+
+# --- VECCHIE ROTTE (invariate) ---
 @app.route('/')
 def index():
     if 'credentials' in flask.session:
         return flask.redirect(flask.url_for('profile'))
     return '<h1>Welcome!</h1><a href="/login"><button>Login with Google</button></a>'
 
+# ... (incolla qui tutte le altre rotte: /login, /oauth2callback, /profile, /thread, /reply, /logout)
+# ...
 @app.route('/login')
 def login():
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
@@ -131,6 +191,7 @@ def reply_to_thread(thread_id):
 def logout():
     flask.session.clear()
     return flask.redirect(flask.url_for('index'))
+
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
